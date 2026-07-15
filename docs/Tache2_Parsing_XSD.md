@@ -220,14 +220,14 @@ ce qu'attend le générateur (M3) : `Bibliotheque` doit avoir une
 
 ---
 
-## 4. Limite connue : types imbriqués non `ref`
+## 4. Types imbriqués sans `ref` (résolu)
 
-Le parseur suppose que le XSD est écrit dans le style du sujet
-(`example.xsd`) : **tous les éléments déclarés à plat au premier
-niveau de `<xs:schema>`, reliés entre eux par `ref`**. Si un XSD
-imbrique directement un `complexType` dans un autre au lieu d'utiliser
-`ref`, le parseur produit un résultat **incomplet et incorrect**, sans
-lever d'erreur.
+Le parseur supposait initialement que le XSD est écrit dans le style
+du sujet (`example.xsd`) : tous les éléments déclarés à plat au
+premier niveau de `<xs:schema>`, reliés entre eux par `ref`. Si un XSD
+imbriquait directement un `complexType` dans un autre au lieu
+d'utiliser `ref`, le parseur produisait un résultat **incomplet et
+incorrect**, sans lever d'erreur. Ce cas est maintenant géré.
 
 Exemple (`src/main/resources/example2.xsd`) :
 
@@ -272,16 +272,14 @@ Seule itération : `el = bibliotheque`.
   - `return childDef`
 - `@A1.children = [livre]`
 
-**`resolveChild` ne lit que les attributs `ref` / `name` / `maxOccurs`
-du tag `childEl` — elle ne regarde jamais si `childEl` contient
-lui-même un `<xs:complexType>`.** Et comme `livre` n'est pas un enfant
-direct de `<xs:schema>`, la boucle principale de la Passe 2 ne le
-revisite jamais pour lui appliquer `setComplex(true)` et résoudre ses
-propres enfants. `titre`, `auteur`, `editeur` ne sont **jamais créés**,
-même pas en stub.
-
-**État final réel** (vérifié en exécutant `XsdParser` sur
-`example2.xsd`) :
+**Avant le fix**, `resolveChild` ne lisait que les attributs
+`ref` / `name` / `maxOccurs` du tag `childEl` — elle ne regardait
+jamais si `childEl` contenait lui-même un `<xs:complexType>`. Et comme
+`livre` n'est pas un enfant direct de `<xs:schema>`, la boucle
+principale de la Passe 2 ne le revisitait jamais pour lui appliquer
+`setComplex(true)` et résoudre ses propres enfants. `titre`, `auteur`,
+`editeur` n'étaient **jamais créés**, même pas en stub. Sortie
+obtenue à l'époque :
 
 ```
 Nombre d'entrees dans le registre: 2
@@ -290,16 +288,67 @@ bibliotheque (complexe)
 livre (simple: null)
 ```
 
-`livre` est incorrectement classé "simple" (`isComplex()` renvoie
-`false`, `simpleType` vaut `null`), et `titre`/`auteur`/`editeur`
-disparaissent complètement du résultat — alors qu'intuitivement
-`livre` devrait être complexe avec 3 champs.
+### Correction apportée
 
-**Conclusion pour l'équipe** : le parseur est volontairement scopé au
-style "déclarations à plat + `ref`" du XSD fourni par le sujet
-(`example.xsd`). Un XSD avec des types imbriqués comme `example2.xsd`
-casserait silencieusement la génération côté M3 (pas d'erreur levée,
-juste une structure incomplète). Si un XSD imbriqué devait être
-supporté un jour, `resolveChild` devrait être rendue récursive :
-détecter un `complexType` interne au `childEl` et le traiter comme un
-mini `parse()` récursif plutôt qu'un simple lookup par nom.
+La logique "remplir un `ElementDef` à partir de son élément DOM"
+(anciennement dupliquée entre `parse()` et absente de `resolveChild`)
+a été extraite dans une méthode commune `resolveContent(registry, el,
+def)` :
+
+```java
+private void resolveContent(Map<String, ElementDef> registry, Element el, ElementDef def) {
+    Element complexType = firstChildElement(el, "complexType");
+    if (complexType != null) {
+        def.setComplex(true);
+        Element sequence = firstChildElement(complexType, "sequence");
+        if (sequence != null) {
+            for (Element childEl : childElements(sequence, "element")) {
+                def.getChildren().add(resolveChild(registry, childEl));
+            }
+        }
+    } else {
+        String type = el.getAttribute("type");
+        if (!type.isEmpty()) {
+            def.setSimpleType(type);
+        }
+    }
+}
+```
+
+`parse()` l'appelle pour chaque élément de premier niveau. Et
+`resolveChild` l'appelle **récursivement sur elle-même** quand
+l'enfant est une déclaration imbriquée (`ref` vide) qui n'a pas encore
+été résolue :
+
+```java
+if (ref.isEmpty() && !alreadyResolved) {
+    resolveContent(registry, childEl, childDef);
+}
+```
+
+`alreadyResolved` (calculé avant la création éventuelle du stub) évite
+de re-résoudre un élément déjà traité si son nom est rencontré une
+deuxième fois — par exemple un élément de premier niveau déjà rempli
+par la boucle principale, ou une déclaration imbriquée réutilisée.
+
+**Résultat après correction** (vérifié en exécutant `XsdParser` sur
+`example2.xsd`) :
+
+```
+Nombre d'entrees dans le registre: 5
+bibliotheque (complexe)
+  -> livre [liste]
+livre (complexe)
+  -> titre
+  -> auteur
+  -> editeur
+titre (simple: xs:string)
+auteur (simple: xs:string)
+editeur (simple: xs:string)
+```
+
+Identique au résultat de `example.xsd` (page structurellement
+équivalente, juste écrite différemment) : `livre` est bien complexe
+avec ses 3 champs, `titre`/`auteur`/`editeur` sont bien créés et
+typés. La récursion `resolveChild` ↔ `resolveContent` gère aussi
+n'importe quelle profondeur d'imbrication, pas seulement 2 niveaux.
