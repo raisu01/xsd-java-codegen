@@ -10,6 +10,20 @@ vue d'ensemble du projet, voir `README.md`.
 - Aucune dépendance externe : tout est fait avec les bibliothèques
   standard du JDK (`javax.xml.parsers`, `java.lang.reflect`)
 
+## Commande unique
+
+```bash
+./run.sh          # bash / Git Bash
+```
+```powershell
+.\run.ps1          # PowerShell
+```
+
+Chaque script enchaîne automatiquement les 4 étapes ci-dessous (nettoyage,
+compilation, génération, tests) et s'arrête au premier échec. Utile pour
+lancer rapidement ; le détail étape par étape reste utile pour comprendre
+ce qui se passe ou dépanner un échec.
+
 ## Pourquoi 2 étapes de compilation
 
 `generated/` (les classes `Bibliotheque.java`/`Livre.java`) **n'est
