@@ -217,3 +217,89 @@ editeur (simple: xs:string)
 Ce résultat confirme que la structure produite correspond exactement à
 ce qu'attend le générateur (M3) : `Bibliotheque` doit avoir une
 `List<Livre>`, `Livre` doit avoir trois attributs `String`.
+
+---
+
+## 4. Limite connue : types imbriqués non `ref`
+
+Le parseur suppose que le XSD est écrit dans le style du sujet
+(`example.xsd`) : **tous les éléments déclarés à plat au premier
+niveau de `<xs:schema>`, reliés entre eux par `ref`**. Si un XSD
+imbrique directement un `complexType` dans un autre au lieu d'utiliser
+`ref`, le parseur produit un résultat **incomplet et incorrect**, sans
+lever d'erreur.
+
+Exemple (`src/main/resources/example2.xsd`) :
+
+```xml
+<xs:element name="bibliotheque">
+  <xs:complexType>
+    <xs:sequence>
+      <xs:element name="livre" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="titre" type="xs:string"/>
+            <xs:element name="auteur" type="xs:string"/>
+            <xs:element name="editeur" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+</xs:element>
+```
+
+Ici, seul `bibliotheque` est un enfant direct de `<xs:schema>` ; `livre`
+et ses trois champs sont imbriqués.
+
+**Trace — Passe 1**
+
+`childElements(schema, "element")` ne trouve que `bibliotheque` :
+
+```
+registry = { "bibliotheque": @A1 {complex:false, list:false, children:[]} }
+```
+
+**Trace — Passe 2**
+
+Seule itération : `el = bibliotheque`.
+- `complexType`/`sequence` trouvés → `@A1.complex = true`
+- 1 enfant dans la séquence : le nœud `<xs:element name="livre" maxOccurs="unbounded">`
+- `resolveChild(registry, childEl)` :
+  - `ref = ""` → `name = childEl.getAttribute("name") = "livre"`
+  - `registry.get("livre")` → `null` → **création à la volée** : `childDef = new ElementDef("livre")`, ajouté au registre
+  - `maxOccurs="unbounded"` → `childDef.setList(true)`
+  - `return childDef`
+- `@A1.children = [livre]`
+
+**`resolveChild` ne lit que les attributs `ref` / `name` / `maxOccurs`
+du tag `childEl` — elle ne regarde jamais si `childEl` contient
+lui-même un `<xs:complexType>`.** Et comme `livre` n'est pas un enfant
+direct de `<xs:schema>`, la boucle principale de la Passe 2 ne le
+revisite jamais pour lui appliquer `setComplex(true)` et résoudre ses
+propres enfants. `titre`, `auteur`, `editeur` ne sont **jamais créés**,
+même pas en stub.
+
+**État final réel** (vérifié en exécutant `XsdParser` sur
+`example2.xsd`) :
+
+```
+Nombre d'entrees dans le registre: 2
+bibliotheque (complexe)
+  -> livre [liste]
+livre (simple: null)
+```
+
+`livre` est incorrectement classé "simple" (`isComplex()` renvoie
+`false`, `simpleType` vaut `null`), et `titre`/`auteur`/`editeur`
+disparaissent complètement du résultat — alors qu'intuitivement
+`livre` devrait être complexe avec 3 champs.
+
+**Conclusion pour l'équipe** : le parseur est volontairement scopé au
+style "déclarations à plat + `ref`" du XSD fourni par le sujet
+(`example.xsd`). Un XSD avec des types imbriqués comme `example2.xsd`
+casserait silencieusement la génération côté M3 (pas d'erreur levée,
+juste une structure incomplète). Si un XSD imbriqué devait être
+supporté un jour, `resolveChild` devrait être rendue récursive :
+détecter un `complexType` interne au `childEl` et le traiter comme un
+mini `parse()` récursif plutôt qu'un simple lookup par nom.
