@@ -18,8 +18,6 @@ import java.util.Map;
  * décrivant les éléments (simples ou complexes), leurs enfants et leurs
  * références.
  *
- * Limites volontaires : seuls xs:element / xs:complexType / xs:sequence /
- * ref / maxOccurs="unbounded" sont gérés (voir docs/Repartition_Taches).
  */
 public class XsdParser {
 
@@ -40,26 +38,34 @@ public class XsdParser {
         // Passe 2 : résoudre le contenu (type simple, ou séquence d'enfants/refs)
         for (Element el : childElements(schema, "element")) {
             String name = el.getAttribute("name");
-            ElementDef def = registry.get(name);
-
-            Element complexType = firstChildElement(el, "complexType");
-            if (complexType != null) {
-                def.setComplex(true);
-                Element sequence = firstChildElement(complexType, "sequence");
-                if (sequence != null) {
-                    for (Element childEl : childElements(sequence, "element")) {
-                        def.getChildren().add(resolveChild(registry, childEl));
-                    }
-                }
-            } else {
-                String type = el.getAttribute("type");
-                if (!type.isEmpty()) {
-                    def.setSimpleType(type);
-                }
-            }
+            resolveContent(registry, el, registry.get(name));
         }
 
         return registry;
+    }
+
+    /**
+     * Remplit un ElementDef à partir de son élément DOM : type simple si pas
+     * de complexType, sinon liste d'enfants résolus (via ref ou déclaration
+     * imbriquée). Appelée à la fois pour les éléments de premier niveau et,
+     * récursivement, pour les éléments imbriqués sans ref.
+     */
+    private void resolveContent(Map<String, ElementDef> registry, Element el, ElementDef def) {
+        Element complexType = firstChildElement(el, "complexType");
+        if (complexType != null) {
+            def.setComplex(true);
+            Element sequence = firstChildElement(complexType, "sequence");
+            if (sequence != null) {
+                for (Element childEl : childElements(sequence, "element")) {
+                    def.getChildren().add(resolveChild(registry, childEl));
+                }
+            }
+        } else {
+            String type = el.getAttribute("type");
+            if (!type.isEmpty()) {
+                def.setSimpleType(type);
+            }
+        }
     }
 
     private ElementDef resolveChild(Map<String, ElementDef> registry, Element childEl) {
@@ -67,12 +73,19 @@ public class XsdParser {
         String name = ref.isEmpty() ? childEl.getAttribute("name") : ref;
 
         ElementDef childDef = registry.get(name);
+        boolean alreadyResolved = childDef != null;
         if (childDef == null) {
             childDef = new ElementDef(name);
             registry.put(name, childDef);
         }
         if ("unbounded".equals(childEl.getAttribute("maxOccurs"))) {
             childDef.setList(true);
+        }
+        // Déclaration imbriquée (pas de ref) : il faut résoudre son propre
+        // contenu ici, car elle n'est pas un enfant direct de <xs:schema> et
+        // ne sera donc jamais traitée par la boucle de premier niveau.
+        if (ref.isEmpty() && !alreadyResolved) {
+            resolveContent(registry, childEl, childDef);
         }
         return childDef;
     }
