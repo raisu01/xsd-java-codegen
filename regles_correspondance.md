@@ -81,13 +81,17 @@ qu'un parseur XSD générique inachevé.
 
 ## 5. Statut du projet
 
-Le pipeline complet (parsing XSD → génération Java → sérialisation `save()`/`load()`)
-a été implémenté et testé de bout en bout sur `bibliotheque.xsd` :
+Chaque membre implémente sa tâche sur sa propre branche (voir
+`docs/Repartition_Taches_Projet_Eval.md`) ; ce document ne couvre que le livrable de
+Membre 1 (les règles ci-dessus). État réel du pipeline à date de rédaction :
 
-- Génération de `Bibliotheque.java` et `Livre.java` conformes au code imposé dans le
-  sujet (`biblio.getLivres().add(livre)`, `livre.setTitre(...)`, etc.)
-- `save()` produit un XML à 3 `<livre>` identique à l'exemple attendu du sujet
-- `load()` recharge correctement le fichier XML généré (round-trip validé)
+- **Membre 2 (parsing XSD)** : fait sur la branche `m2` — `XsdParser` construit une
+  structure intermédiaire (`ElementDef`) conforme à la section 3, y compris pour des
+  types complexes imbriqués sans `ref`
+- **Membre 3 (génération des classes Java)** : pas encore implémenté
+- **Membre 4 (sérialisation `save()`)** : pas encore implémenté — le sujet ne demande
+  que `save()`, pas de `load()`
+- **Membre 5 (tests bout en bout)** : dépend de M3 + M4, donc pas encore possible
 
 ---
 
@@ -95,8 +99,9 @@ a été implémenté et testé de bout en bout sur `bibliotheque.xsd` :
 
 Les règles définies dans ce document couvrent l'intégralité des concepts présents dans
 le XSD de référence du sujet, tout en restant volontairement simples pour rester
-réalisables dans le temps imparti. Elles ont été validées empiriquement : le générateur
-construit sur cette base produit un XML strictement identique à celui attendu.
+réalisables dans le temps imparti. Elles ont été validées empiriquement côté parsing
+(Membre 2, branche `m2`) ; la génération de classes et la sérialisation restent à
+implémenter par les Membres 3 et 4 avant de pouvoir valider la chaîne complète.
 
 Cette correspondance sert de référence commune à toute l'équipe : le Membre 2 doit
 extraire une structure intermédiaire qui distingue clairement type simple vs type
