@@ -18,3 +18,7 @@ output/*.xml
 # OS
 .DS_Store
 Thumbs.db
+
+# Build & generated output
+out/
+generated/
