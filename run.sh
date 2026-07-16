@@ -6,12 +6,12 @@ cd "$(dirname "$0")"
 
 rm -rf target generated output
 
-find src/main/java/com/ifall/xsdcodegen/{model,parser,generator,runtime} -name "*.java" \
-  | xargs javac -d target/classes
+javac -sourcepath src/main/java -d target/classes \
+  src/main/java/com/ifall/xsdcodegen/generator/GeneratorDemo.java
 
 java -cp target/classes com.ifall.xsdcodegen.generator.GeneratorDemo
 
-find generated src/main/java/com/ifall/xsdcodegen/test -name "*.java" \
-  | xargs javac -cp target/classes -d target/classes
+javac -sourcepath "src/main/java;generated" -d target/classes \
+  src/main/java/com/ifall/xsdcodegen/test/TestMain.java
 
 java -cp target/classes com.ifall.xsdcodegen.test.TestMain

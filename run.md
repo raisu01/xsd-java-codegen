@@ -35,47 +35,36 @@ directement ces classes générées. Il faut donc :
 3. compiler `TestMain` + les classes générées ensemble,
 4. lancer `TestMain`.
 
-## Commandes (bash / Git Bash)
+## Commandes (juste javac + java, sans find)
+
+Une seule commande `javac` par étape de compilation, grâce à
+`-sourcepath` : on ne donne que le fichier "point d'entrée"
+(celui qui a `main()`), `javac` va chercher lui-même les autres
+fichiers dont il dépend (`XsdParser`, `JavaCodeGenerator`,
+`AbstractXmlElement`...) dans les dossiers indiqués.
+
+**Séparateur `-sourcepath` : `;` sous Windows, `:` sous Linux/macOS**
+(défini par le JDK/l'OS, pas par le shell — donc identique en bash ou
+en PowerShell sur une même machine). Exemples ci-dessous pour Windows.
 
 ```bash
-# 1. Compiler le parsing (M2), la génération (M3) et le runtime (M4)
-find src/main/java/com/ifall/xsdcodegen/{model,parser,generator,runtime} -name "*.java" \
-  | xargs javac -d target/classes
+# 1. javac : compiler (point d'entrée = GeneratorDemo, javac résout le reste)
+javac -sourcepath src/main/java -d target/classes \
+  src/main/java/com/ifall/xsdcodegen/generator/GeneratorDemo.java
 
-# 2. Générer Bibliotheque.java / Livre.java à partir de example.xsd
+# 2. java : exécuter -> génère Bibliotheque.java / Livre.java dans generated/
 java -cp target/classes com.ifall.xsdcodegen.generator.GeneratorDemo
 
-# 3. Compiler les classes générées + TestMain (M5)
-find generated src/main/java/com/ifall/xsdcodegen/test -name "*.java" \
-  | xargs javac -cp target/classes -d target/classes
+# 3. javac : compiler TestMain (dépend des classes générées à l'étape 2)
+javac -sourcepath "src/main/java;generated" -d target/classes \
+  src/main/java/com/ifall/xsdcodegen/test/TestMain.java
 
-# 4. Lancer les tests (reproduit l'exemple imposé du sujet)
+# 4. java : exécuter les tests
 java -cp target/classes com.ifall.xsdcodegen.test.TestMain
 ```
 
-## Commandes (PowerShell)
-
-```powershell
-# 1. Compiler M2 + M3 + M4
-Get-ChildItem -Recurse -Include *.java `
-  src\main\java\com\ifall\xsdcodegen\model,
-  src\main\java\com\ifall\xsdcodegen\parser,
-  src\main\java\com\ifall\xsdcodegen\generator,
-  src\main\java\com\ifall\xsdcodegen\runtime |
-  ForEach-Object { $_.FullName } | Set-Content sources.txt
-javac -d target/classes "@sources.txt"
-
-# 2. Générer les classes
-java -cp target/classes com.ifall.xsdcodegen.generator.GeneratorDemo
-
-# 3. Compiler les classes générées + TestMain
-Get-ChildItem -Recurse -Include *.java generated, src\main\java\com\ifall\xsdcodegen\test |
-  ForEach-Object { $_.FullName } | Set-Content sources2.txt
-javac -cp target/classes -d target/classes "@sources2.txt"
-
-# 4. Lancer les tests
-java -cp target/classes com.ifall.xsdcodegen.test.TestMain
-```
+Identique en PowerShell (juste remplacer le `\` de continuation de
+ligne par `` ` ``).
 
 ## Sortie attendue
 

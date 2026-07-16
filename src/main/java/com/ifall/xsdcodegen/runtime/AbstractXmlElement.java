@@ -6,33 +6,7 @@ import java.io.PrintWriter;
 import java.lang.reflect.Field;
 import java.util.List;
 
-/**
- * Classe de base commune à toutes les classes générées par le Membre 3
- * (JavaCodeGenerator).
- *
- * ATTENTION : ceci est un PLACEHOLDER écrit par le Membre 3 uniquement pour
- * pouvoir compiler et tester le générateur de façon autonome, en attendant
- * l'implémentation réelle de la sérialisation par le Membre 4.
- *
- * implémentation du Membre 4 : sérialisation Java -> XML par réflexion.
- *
- * Principe : chaque instance d'une sous-classe (ex. Bibliotheque, Livre)
- * connaît son nom de balise XML (elementName, fixé par le constructeur
- * généré, ex. super("livre")). save() parcourt récursivement, via
- * java.lang.reflect, les champs *déclarés* de la sous-classe concrète
- * (getClass().getDeclaredFields() ne remonte pas à AbstractXmlElement,
- * donc le champ elementName lui-même n'est jamais sérialisé) :
- *
- *  - un champ List<?> d'éléments AbstractXmlElement  -> répétition de
- *    balises, une par élément de la liste (ex. plusieurs <livre>...</livre>
- *    dans <bibliotheque>) ;
- *  - un champ qui est lui-même un AbstractXmlElement (imbrication simple,
- *    non-liste) -> une balise imbriquée récursive ;
- *  - un champ "simple" (String, Integer, Boolean, ...) -> une balise
- *    feuille contenant sa valeur textuelle (échappée).
- *
- * Champs null : ignorés (pas de balise vide générée
- */
+
 
 public abstract class AbstractXmlElement {
     protected final String elementName;
